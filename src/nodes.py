@@ -1,3 +1,5 @@
+from typing import Iterable, List
+
 from extraction import extract_markdown_images, extract_markdown_links
 from leafnode import LeafNode
 from textnode import TextNode, TextType
@@ -5,69 +7,54 @@ from textnode import TextNode, TextType
 # Set DELIM_TO_STYLE table for use everywhere
 DELIM_TO_STYLE = {
     "**": TextType.BOLD,
-    "__": TextType.ITALIC,
+    "_": TextType.ITALIC,
     "`": TextType.CODE,
 }
 
 
-# Convert a TextNode to an HTMLNode (LeafNode)
-def text_node_to_html_node(text_node):
+def split_nodes_delimiter(nodes: Iterable[TextNode], delimiter: str) -> List[TextNode]:
     """
-    Convert a TextNode to an HTMLNode
-    (specfically a LeafNode)
+    Walk over *nodes*.  For each node whose text_type is NORMAL and whose text
+    contains *delimiter*, split its .text on that delimiter and toggle the
+    style.  All other nodes are copied unchanged.
+
+    Returns a brand-new list; the input list and its nodes are never mutated.
+
+    Raises
+    ------
+    ValueError
+        • Unknown delimiter
+        • Unclosed delimiter sequence (odd number of delimiters)
     """
-    if text_node.text_type == TextType.NORMAL:
-        return LeafNode(None, text_node.text)
-    elif text_node.text_type == TextType.BOLD:
-        return LeafNode("b", text_node.text)
-    elif text_node.text_type == TextType.ITALIC:
-        return LeafNode("i", text_node.text)
-    elif text_node.text_type == TextType.CODE:
-        return LeafNode("code", text_node.text)
-    elif text_node.text_type == TextType.LINK:
-        return LeafNode("a", text_node.text, {"href": text_node.url})
-    elif text_node.text_type == TextType.IMAGE:
-        return LeafNode("img", None, {"src": text_node.url, "alt": ""})
-    else:
-        raise ValueError(f"Unknown text_type: {text_node.text_type}")
-
-
-def split_nodes_delimiter(nodes, delimiter: str, default_style: TextType):
-    """
-    Split the text content of *nodes* on *delimiter* and return a list of
-    TextNode instances whose `text_type` is toggled according to the delimiter.
-
-    • If the delimiter is not present or default_style is NORMAL, the original
-      nodes are returned unchanged.
-    • Raises ValueError if a delimiter is opened but not closed.
-    """
-
-    if default_style is not TextType.NORMAL:
-        return [nodes]  # nothing to transform
-
-    # Map delimiters to the text style they introduce
-    # delim_style = {
-    #     "**": TextType.BOLD,
-    #     "__": TextType.ITALIC,
-    #     "`": TextType.CODE,
-    # }.get(delimiter)
     alt_style = DELIM_TO_STYLE.get(delimiter)
-
     if alt_style is None:
-        raise ValueError(f"Invalid delimiter: {delimiter!r}")  # not a valid delimiter
+        raise ValueError(f"Invalid delimiter: {delimiter!r}")
 
-    parts = nodes.text.split(delimiter)
-    if len(parts) % 2 == 0:  # odd → properly closed, even → unclosed
-        raise ValueError(
-            f"Invalid markdown syntax detected: no closing {delimiter!r} found"
-        )
+    out: List[TextNode] = []
 
-    result = [
-        TextNode(segment, alt_style if i % 2 else TextType.NORMAL)
-        for i, segment in enumerate(parts)
-    ]
+    for node in nodes:
+        # 1. Leave non-NORMAL nodes untouched
+        if node.text_type is not TextType.NORMAL:
+            out.append(node)
+            continue
 
-    return result
+        # 2. No delimiter present → nothing to split
+        if delimiter not in node.text:
+            out.append(node)
+            continue
+
+        # 3. Split and rebuild
+        parts = node.text.split(delimiter)
+        if len(parts) % 2 == 0:  # even ⇒ an opening delimiter was never closed
+            raise ValueError(
+                f"Invalid markdown syntax: no closing {delimiter!r} in {node.text!r}"
+            )
+
+        for idx, segment in enumerate(parts):
+            style = alt_style if idx % 2 else TextType.NORMAL
+            out.append(TextNode(segment, style))
+
+    return out
 
 
 def split_nodes_image(nodes: list[TextNode]) -> list[TextNode]:
@@ -116,3 +103,24 @@ def split_nodes_link(nodes: list[TextNode]) -> list[TextNode]:
             new_nodes.append(TextNode(remaining_text, TextType.NORMAL))
 
     return new_nodes
+
+
+def text_to_textnodes(text: str) -> list[TextNode]:
+    """
+    Convert a string to a list of TextNode instances.
+    """
+
+    # Split the text into nodes
+    nodes = [TextNode(text, TextType.NORMAL)]
+
+    # Split the nodes on the delimiters
+    for delim in DELIM_TO_STYLE.keys():
+        nodes = split_nodes_delimiter(nodes, delim)
+
+    # Split the nodes on images
+    nodes = split_nodes_image(nodes)
+
+    # Split the nodes on links
+    nodes = split_nodes_link(nodes)
+
+    return nodes

@@ -16,7 +16,7 @@ class TestTextNode(unittest.TestCase):
 
     def test_link_type(self):
         node = TextNode("This is a link node", TextType.LINK, "www.haplolabs.io")
-        self.assertEqual(node.text_type.value, "link")
+        self.assertEqual(node.text_type.value, "TextType.LINK")
 
     def test_url_value(self):
         node = TextNode("This is a url test", TextType.LINK)

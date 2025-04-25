@@ -5,12 +5,12 @@ from leafnode import LeafNode
 
 
 class TextType(Enum):
-    NORMAL = "normal"
-    BOLD = "bold"
-    ITALIC = "italic"
-    CODE = "code"
-    LINK = "link"
-    IMAGE = "image"
+    NORMAL = "TextType.NORMAL"
+    BOLD = "TextType.BOLD"
+    ITALIC = "TextType.ITALIC"
+    CODE = "TextType.CODE"
+    LINK = "TextType.LINK"
+    IMAGE = "TextType.IMAGE"
 
 
 class TextNode:
